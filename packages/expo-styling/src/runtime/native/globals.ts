@@ -1,3 +1,4 @@
+import { createContext } from "react";
 import { Dimensions, Platform, Appearance } from "react-native";
 
 import { createSignal } from "./signals";
@@ -13,6 +14,8 @@ export const rem = createRem(14);
 export const vw = viewportUnit("width", Dimensions);
 export const vh = viewportUnit("height", Dimensions);
 export const colorScheme = createColorScheme(Appearance);
+
+export const VariableContext = createContext<Record<string, any>>({});
 
 export function getGlobalStyles(value: string): StyleProp[] {
   return value.split(/\s+/).map((v) => globalStyles.get(v));
