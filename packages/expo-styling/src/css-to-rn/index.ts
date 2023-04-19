@@ -10,7 +10,11 @@ import {
 
 import { parseDeclaration } from "./parseDeclaration";
 import { isRuntimeValue } from "../runtime/native/guards";
-import { ExtractedStyle, StyleSheetRegisterOptions } from "../types";
+import {
+  ExtractedStyle,
+  PseudoClassesQuery,
+  StyleSheetRegisterOptions,
+} from "../types";
 
 interface GetVisitorOptions {
   declarations: Map<string, ExtractedStyle | ExtractedStyle[]>;
@@ -66,18 +70,121 @@ function setStyleForSelectorList(
   declarations: GetVisitorOptions["declarations"]
 ) {
   for (const selectors of selectorList) {
-    for (const selector of selectors) {
-      if (selector.type === "class") {
-        const existing = declarations.get(selector.name);
+    let className: string | undefined;
+    let pseudoClasses: PseudoClassesQuery | undefined;
 
-        if (Array.isArray(existing)) {
-          existing.push(style);
-        } else if (existing) {
-          declarations.set(selector.name, [existing, style]);
-        } else {
-          declarations.set(selector.name, style);
-        }
+    for (const selector of selectors) {
+      switch (selector.type) {
+        case "combinator":
+        case "universal":
+        case "namespace":
+        case "type":
+        case "id":
+          break;
+        case "class":
+          className = selector.name;
+          break;
+        case "attribute":
+          break;
+        case "pseudo-class":
+          switch (selector.kind) {
+            case "not":
+            case "first-child":
+            case "last-child":
+            case "only-child":
+            case "root":
+            case "empty":
+            case "scope":
+            case "nth-child":
+            case "nth-last-child":
+            case "nth-col":
+            case "nth-last-col":
+            case "nth-of-type":
+            case "nth-last-of-type":
+            case "first-of-type":
+            case "last-of-type":
+            case "only-of-type":
+            case "host":
+            case "where":
+            case "is":
+            case "any":
+            case "has":
+            case "lang":
+            case "dir":
+              break;
+            case "hover":
+            case "active":
+            case "focus":
+              pseudoClasses ??= {};
+              pseudoClasses[selector.kind] = true;
+              break;
+            case "focus-visible":
+            case "focus-within":
+            case "current":
+            case "past":
+            case "future":
+            case "playing":
+            case "paused":
+            case "seeking":
+            case "buffering":
+            case "stalled":
+            case "muted":
+            case "volume-locked":
+            case "fullscreen":
+            case "defined":
+            case "any-link":
+            case "link":
+            case "local-link":
+            case "target":
+            case "target-within":
+            case "visited":
+            case "enabled":
+            case "disabled":
+            case "read-only":
+            case "read-write":
+            case "placeholder-shown":
+            case "default":
+            case "checked":
+            case "indeterminate":
+            case "blank":
+            case "valid":
+            case "invalid":
+            case "in-range":
+            case "out-of-range":
+            case "required":
+            case "optional":
+            case "user-valid":
+            case "user-invalid":
+            case "autofill":
+            case "local":
+            case "global":
+            case "webkit-scrollbar":
+            case "custom":
+            case "custom-function":
+              break;
+          }
+          break;
+        case "pseudo-element":
+        case "nesting":
       }
+    }
+
+    if (!className) {
+      continue;
+    }
+
+    const styleWithPseudoClass = pseudoClasses
+      ? { ...style, pseudoClasses }
+      : style;
+
+    const existing = declarations.get(className);
+
+    if (Array.isArray(existing)) {
+      existing.push(styleWithPseudoClass);
+    } else if (existing) {
+      declarations.set(className, [existing, styleWithPseudoClass]);
+    } else {
+      declarations.set(className, styleWithPseudoClass);
     }
   }
 }

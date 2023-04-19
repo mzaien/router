@@ -1,10 +1,13 @@
 import { rem, styleMetaMap, vh, vw } from "./globals";
 import { isRuntimeValue } from "./guards";
+import { Interaction } from "./interaction";
 import { testMediaQuery } from "./mediaQuery";
 import { Style, StyleMeta, StyleProp } from "../../types";
+import { testPseudoClasses } from "./pseudoClasses";
 
 interface FlattenStyleOptions {
   variables: Record<string, any>;
+  interaction: Interaction;
 }
 
 /**
@@ -74,11 +77,18 @@ export function flattenStyle(
       } else {
         flatStyleMeta.variables[key] = getterOrValue;
       }
-      continue;
     }
 
     // Skip already set keys
     if (key in flatStyle) continue;
+
+    // Skip failed interaction queries
+    if (
+      styleMeta.pseudoClasses &&
+      !testPseudoClasses(options.interaction, styleMeta.pseudoClasses)
+    ) {
+      continue;
+    }
 
     // Skip failed media queries
     if (styleMeta.media && !styleMeta.media.every(testMediaQuery)) {
