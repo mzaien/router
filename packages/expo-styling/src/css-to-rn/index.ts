@@ -1,4 +1,6 @@
 import {
+  KeyframesRule,
+  Animation,
   Declaration,
   transform as lightningcss,
   DeclarationBlock,
@@ -9,8 +11,10 @@ import {
 } from "lightningcss";
 
 import { parseDeclaration } from "./parseDeclaration";
+import { exhaustiveCheck } from "./utils";
 import { isRuntimeValue } from "../runtime/native/guards";
 import {
+  ExtractedKeyframe,
   ExtractedStyle,
   PseudoClassesQuery,
   StyleSheetRegisterOptions,
@@ -18,6 +22,7 @@ import {
 
 interface GetVisitorOptions {
   declarations: Map<string, ExtractedStyle | ExtractedStyle[]>;
+  keyframes: Map<string, ExtractedKeyframe[]>;
 }
 
 /**
@@ -27,13 +32,14 @@ export function cssToReactNativeRuntime(
   code: Buffer
 ): StyleSheetRegisterOptions {
   const declarations = new Map<string, ExtractedStyle | ExtractedStyle[]>();
+  const keyframes = new Map<string, ExtractedKeyframe[]>();
 
   lightningcss({
     filename: "style.css", // This is ignored, but required
     code,
     visitor: {
       Rule(rule) {
-        extractRule(rule, { declarations });
+        extractRule(rule, { declarations, keyframes });
         // We have processed this rule, so now delete it from the AST
         return [];
       },
@@ -42,11 +48,19 @@ export function cssToReactNativeRuntime(
 
   return {
     declarations: Object.fromEntries(declarations),
+    keyframes: Object.fromEntries(keyframes),
   };
 }
 
-function extractRule(rule: Rule, { declarations }: GetVisitorOptions) {
+function extractRule(
+  rule: Rule,
+  { declarations, keyframes }: GetVisitorOptions
+) {
   switch (rule.type) {
+    case "keyframes": {
+      extractKeyFrames(rule.value, keyframes);
+      break;
+    }
     case "media": {
       extractedMedia(rule.value, declarations);
       break;
@@ -225,12 +239,57 @@ function extractedMedia(
   return undefined;
 }
 
+function extractKeyFrames(
+  keyframes: KeyframesRule<Declaration>,
+  map: Map<string, ExtractedKeyframe[]>
+) {
+  let frames: ExtractedKeyframe[] = [];
+
+  for (const frame of keyframes.keyframes) {
+    const { style } = getExtractedStyle(frame.declarations);
+
+    for (const selector of frame.selectors) {
+      const keyframe =
+        selector.type === "percentage"
+          ? selector.value * 100
+          : selector.type === "from"
+          ? 0
+          : selector.type === "to"
+          ? 100
+          : undefined;
+
+      if (keyframe === undefined) continue;
+
+      for (const selector of frame.selectors) {
+        switch (selector.type) {
+          case "percentage":
+            frames.push({ selector: selector.value, style });
+            break;
+          case "from":
+            frames.push({ selector: 0, style });
+            break;
+          case "to":
+            frames.push({ selector: 100, style });
+            break;
+          default:
+            exhaustiveCheck(selector);
+        }
+      }
+    }
+  }
+  frames = frames.sort((a, b) => a.selector - b.selector);
+
+  map.set(keyframes.name.value, frames);
+}
+
 function getExtractedStyle(
   declarationBlock: DeclarationBlock<Declaration>
 ): ExtractedStyle {
-  const style: Record<string, any> = {};
-  const runtimeStyleProps: string[] = [];
-  const variableProps: string[] = [];
+  const extrtactedStyle: ExtractedStyle = {
+    style: {},
+    runtimeStyleProps: [],
+    variableProps: [],
+  };
 
   const declarationArray = [
     declarationBlock.declarations,
@@ -259,15 +318,18 @@ function getExtractedStyle(
     }
 
     if (property.startsWith("--")) {
-      variableProps.push(property);
+      extrtactedStyle.variableProps.push(property);
     } else {
       // RN styles need to be camelCase
       property = property.replace(/-./g, (x) => x[1].toUpperCase());
     }
 
+    const style = extrtactedStyle.style;
+
     if (append) {
-      if (Array.isArray(style[property])) {
-        style[property].push(...value);
+      const styleValue = style[property];
+      if (Array.isArray(styleValue)) {
+        styleValue.push(...value);
       } else {
         style[property] = [value];
       }
@@ -278,17 +340,45 @@ function getExtractedStyle(
     }
 
     if (isRuntimeValue(value)) {
-      runtimeStyleProps.push(property);
+      extrtactedStyle.runtimeStyleProps.push(property);
+    }
+  }
+
+  function addAnimationProp(property: string, value: any) {
+    if (property === "animation") {
+      const groupedProperties: Record<string, any[]> = {};
+
+      for (const animation of value as Animation[]) {
+        for (const [key, value] of Object.entries(animation)) {
+          groupedProperties[key] ??= [];
+          groupedProperties[key].push(value);
+        }
+      }
+
+      extrtactedStyle.animations ??= {};
+      for (const [property, value] of Object.entries(groupedProperties)) {
+        const key = property
+          .replace("animation-", "")
+          .replace(/-./g, (x) => x[1].toUpperCase()) as keyof Animation;
+
+        extrtactedStyle.animations[key] ??= value;
+      }
+    } else {
+      const key = property
+        .replace("animation-", "")
+        .replace(/-./g, (x) => x[1].toUpperCase()) as keyof Animation;
+
+      extrtactedStyle.animations ??= {};
+      extrtactedStyle.animations[key] = value;
     }
   }
 
   for (const declaration of declarationArray) {
-    parseDeclaration(declaration, addStyleProp);
+    parseDeclaration(declaration, {
+      addStyleProp,
+      addAnimationProp,
+    });
   }
 
-  return {
-    runtimeStyleProps,
-    variableProps,
-    style,
-  };
+  return extrtactedStyle;
 }

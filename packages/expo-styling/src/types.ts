@@ -1,4 +1,4 @@
-import { MediaQuery } from "lightningcss";
+import type { MediaQuery, Animation } from "lightningcss";
 import type {
   ImageStyle,
   MatrixTransform,
@@ -36,6 +36,9 @@ export type ExtractedStyle = {
   media?: MediaQuery[];
   style: Record<string, ExtractedStyleValue>;
   pseudoClasses?: PseudoClassesQuery;
+  animations?: {
+    [K in keyof Animation]?: Animation[K][];
+  };
 };
 
 export type StyleMeta = {
@@ -44,6 +47,16 @@ export type StyleMeta = {
   media?: MediaQuery[];
   variables?: Record<string, unknown>;
   pseudoClasses?: PseudoClassesQuery;
+  animations?: ExtractedAnimations;
+};
+
+export type ExtractedAnimations = {
+  [K in keyof Animation]?: Animation[K][];
+};
+
+export type ExtractedKeyframe = {
+  selector: number;
+  style: Record<string, ExtractedStyleValue>;
 };
 
 export type PseudoClassesQuery = {
@@ -54,6 +67,7 @@ export type PseudoClassesQuery = {
 
 export type StyleSheetRegisterOptions = {
   declarations?: Record<string, ExtractedStyle | ExtractedStyle[]>;
+  keyframes?: Record<string, ExtractedKeyframe[]>;
 };
 
 export type Style = ViewStyle | TextStyle | ImageStyle;
@@ -78,3 +92,18 @@ export type TransformRecord = Partial<
     SkewYTransform &
     MatrixTransform
 >;
+
+export type CamelToKebabCase<
+  T extends string,
+  A extends string = ""
+> = T extends `${infer F}${infer R}`
+  ? CamelToKebabCase<
+      R,
+      `${A}${F extends Lowercase<F> ? "" : "-"}${Lowercase<F>}`
+    >
+  : A;
+
+export type KebabToCamelCase<S extends string> =
+  S extends `${infer P1}-${infer P2}${infer P3}`
+    ? `${Lowercase<P1>}${Uppercase<P2>}${KebabToCamelCase<P3>}`
+    : Lowercase<S>;

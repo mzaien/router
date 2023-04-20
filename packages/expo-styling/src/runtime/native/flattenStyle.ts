@@ -2,10 +2,10 @@ import { rem, styleMetaMap, vh, vw } from "./globals";
 import { isRuntimeValue } from "./guards";
 import { Interaction } from "./interaction";
 import { testMediaQuery } from "./mediaQuery";
-import { Style, StyleMeta, StyleProp } from "../../types";
 import { testPseudoClasses } from "./pseudoClasses";
+import { Style, StyleMeta, StyleProp } from "../../types";
 
-interface FlattenStyleOptions {
+export interface FlattenStyleOptions {
   variables: Record<string, any>;
   interaction: Interaction;
 }
@@ -51,6 +51,13 @@ export function flattenStyle(
   // Note: This is different to flatStyleMeta, which is the metadata
   // for the FLATTENED style object
   const styleMeta = styleMetaMap.get(styles) ?? {};
+
+  if (styleMeta.animations) {
+    flatStyleMeta.animations = {
+      ...flatStyleMeta.animations,
+      ...styleMeta.animations,
+    };
+  }
 
   for (const [key, value] of Object.entries(styles)) {
     // Variables are prefixed with `--` and should not be flattened

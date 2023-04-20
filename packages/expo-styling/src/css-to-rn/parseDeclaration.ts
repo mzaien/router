@@ -41,9 +41,16 @@ type AddStyleProp = (
   }
 ) => void;
 
+type AddAnimationDefaultProp = (property: string, value: unknown[]) => void;
+
+interface ParseDeclarationOptions {
+  addStyleProp: AddStyleProp;
+  addAnimationProp: AddAnimationDefaultProp;
+}
+
 export function parseDeclaration(
   declaration: Declaration,
-  addStyleProp: AddStyleProp
+  { addStyleProp, addAnimationProp }: ParseDeclarationOptions
 ) {
   if (declaration.property === "unparsed") {
     return addStyleProp(
@@ -900,24 +907,16 @@ export function parseDeclaration(
       return;
     case "transition":
       return;
-    case "animation-name":
-      return;
     case "animation-duration":
-      return;
     case "animation-timing-function":
-      return;
     case "animation-iteration-count":
-      return;
     case "animation-direction":
-      return;
     case "animation-play-state":
-      return;
     case "animation-delay":
-      return;
     case "animation-fill-mode":
-      return;
+    case "animation-name":
     case "animation":
-      return;
+      return addAnimationProp(declaration.property, declaration.value);
     case "transform": {
       const transforms: TransformRecord[] = [];
 
